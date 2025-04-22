@@ -20,7 +20,14 @@ sudo apt install mysql-server -y
 echo "Running MySQL secure installation..."
 sudo mysql_secure_installation
 
-# نصب phpMyAdmin و پیکربندی آن
+# درخواست پسورد MySQL برای root
+MYSQL_ROOT_PASS="your_root_password" # تنظیم پسورد ریشه MySQL
+echo "Configuring phpMyAdmin to use MySQL root password..."
+sudo debconf-set-selections <<< "phpmyadmin phpmyadmin/dbconfig-install boolean true"
+sudo debconf-set-selections <<< "phpmyadmin phpmyadmin/mysql/admin-pass password $MYSQL_ROOT_PASS"
+sudo debconf-set-selections <<< "phpmyadmin phpmyadmin/mysql/app-pass password $MYSQL_ROOT_PASS"
+
+# نصب phpMyAdmin و required PHP extensions
 echo "Installing phpMyAdmin and required PHP extensions..."
 sudo apt install phpmyadmin php-mbstring php-zip php-gd php-json php-curl -y
 
@@ -51,16 +58,6 @@ echo "Setting permissions for phpMyAdmin..."
 sudo chmod -R 755 /usr/share/phpmyadmin
 sudo chown -R www-data:www-data /usr/share/phpmyadmin
 
-# تنظیم Webhook ربات تلگرام
-echo "Setting Telegram bot webhook..."
-curl -F "url=https://bot.mazholl.mehdilorna.shop/lornapanel/index.php" https://api.telegram.org/botYOUR_BOT_TOKEN/setWebhook
-
-# نصب تونل (اختیاری)
-echo "Setting up Tunnel (if applicable)..."
-wget https://raw.githubusercontent.com/lornaNET/lorna_tunell/main/setup-tunnel.sh
-chmod +x setup-tunnel.sh
-sudo ./setup-tunnel.sh
-
 # راه‌اندازی Nginx و بررسی وضعیت آن
 echo "Restarting Nginx and checking status..."
 sudo systemctl restart nginx
@@ -70,20 +67,3 @@ sudo systemctl status nginx
 echo "Checking access to phpMyAdmin and Nginx logs..."
 sudo tail -f /var/log/nginx/error.log
 sudo ls /var/www/html/phpmyadmin/index.php
-
-# پاک‌سازی فایل‌های اضافی Nginx (در صورت نیاز)
-echo "Cleaning up old Nginx configurations..."
-sudo rm -rf /etc/nginx/sites-enabled/default
-sudo rm -rf /etc/nginx/sites-available/default
-
-# حذف Nginx و نصب دوباره (در صورت نیاز)
-echo "Purging old Nginx and installing again (if required)..."
-sudo apt-get purge nginx nginx-common nginx-full nginx-core nginx-common -y
-sudo apt-get autoremove --purge -y
-sudo rm -rf /etc/nginx
-sudo rm -rf /var/www/html
-sudo rm -rf /var/log/nginx
-
-# نصب مجدد Nginx
-echo "Reinstalling Nginx..."
-sudo apt install nginx -y
