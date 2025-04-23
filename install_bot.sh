@@ -1,36 +1,43 @@
 #!/bin/bash
 
-# LORNA Installer - YAD Version
-# Compatible with Ubuntu 20.04 / 22.04
+# LORNA Installer - YAD GUI Version
+# Compatible with Ubuntu 20.04 and 22.04
+# Author: github.com/yourusername
 
-# Function to display the main menu
+# Dependencies check and install
+sudo apt update > /dev/null
+for pkg in yad curl socat phpmyadmin php8.1-fpm mysql-server certbot python3-certbot-nginx; do
+    if ! dpkg -s "$pkg" &> /dev/null; then
+        sudo apt install "$pkg" -y
+    fi
+done
+
+# Show main menu using YAD
 show_main_menu() {
-  yad --width=400 --height=300 --center --image="logo.png" --title="LORNA Installer" \
-    --text="<b>Welcome to the LORNA Installer</b>\nPlease choose an option:" \
-    --button="Install LORNA Stack":1 \
-    --button="Uninstall Everything":2 \
-    --button="Exit":3
+  yad --width=400 --height=300 --center \
+      --title="LORNA Installer" \
+      --image="logo.png" --image-on-top \
+      --text="<b>Welcome to the LORNA Installer</b>\nSelect an option below:" \
+      --button="Install LORNA Stack":1 \
+      --button="Uninstall Everything":2 \
+      --button="Exit":3
 }
 
-# Function to install LORNA stack
+# Install function
 install_lorna() {
-  espeak "Installation started"
-  yad --info --text="Starting system update..."
+  yad --info --title="System Update" --text="Updating and upgrading system..."
   sudo apt update && sudo apt upgrade -y
 
-  yad --info --text="Installing required packages..."
-  sudo apt install -y curl socat phpmyadmin php8.1-fpm mysql-server certbot python3-certbot-nginx
-
-  # Get MySQL root password and domain
-  credentials=$(yad --form --title="LORNA Configuration" \
+  # Form for credentials
+  form_data=$(yad --form --title="LORNA Config" \
     --field="MySQL Root Password":H \
-    --field="Your Domain (e.g., example.com)")
+    --field="Your Domain (e.g. example.com):")
 
-  MYSQL_PASS=$(echo "$credentials" | cut -d '|' -f1)
-  DOMAIN=$(echo "$credentials" | cut -d '|' -f2)
+  MYSQL_PASS=$(echo "$form_data" | cut -d '|' -f1)
+  DOMAIN=$(echo "$form_data" | cut -d '|' -f2)
 
-  # Configure Nginx
-  yad --info --text="Creating Nginx configuration for $DOMAIN..."
+  # Nginx config
+  yad --info --text="Creating Nginx configuration..."
   sudo bash -c "cat > /etc/nginx/sites-available/$DOMAIN" <<EOF
 server {
     listen 80;
@@ -54,41 +61,41 @@ server {
 }
 EOF
 
-  sudo ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
+  sudo ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
   sudo nginx -t && sudo systemctl reload nginx
 
-  # Obtain SSL certificate
-  yad --info --text="Requesting SSL certificate..."
+  # Certbot SSL
+  yad --info --title="SSL Certificate" --text="Generating SSL certificate with Certbot..."
   sudo certbot --nginx -d $DOMAIN
 
-  # Setup phpMyAdmin
+  # phpMyAdmin symlink
   sudo ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
 
   yad --info --title="Installation Complete" \
-    --text="Access phpMyAdmin at: https://$DOMAIN/phpmyadmin"
-  espeak "Installation completed successfully"
+      --text="Installation completed!\nVisit: https://$DOMAIN/phpmyadmin"
 }
 
-# Function to uninstall LORNA stack
+# Uninstall function
 uninstall_lorna() {
-  espeak "Starting uninstallation"
-  yad --warning --text="Uninstalling everything. This will remove phpMyAdmin, MySQL, PHP, Nginx..."
+  confirm=$(yad --question --title="Uninstall LORNA" \
+    --text="This will remove phpMyAdmin, MySQL, PHP, and Nginx.\nAre you sure?" \
+    --button=Yes:0 --button=No:1)
 
-  sudo rm -rf /usr/share/phpmyadmin /var/www/html/phpmyadmin
-  sudo apt purge -y phpmyadmin mysql-server nginx php* certbot
-  sudo apt autoremove -y
-
-  yad --info --text="Uninstallation complete"
-  espeak "Uninstallation complete"
+  if [ $? -eq 0 ]; then
+    sudo rm -rf /usr/share/phpmyadmin /var/www/html/phpmyadmin
+    sudo apt purge -y phpmyadmin mysql-server nginx php* certbot
+    sudo apt autoremove -y
+    yad --info --text="Uninstallation completed successfully."
+  fi
 }
 
-# Main script execution
+# Main loop
 while true; do
   choice=$(show_main_menu)
   case $? in
     1) install_lorna ;;
     2) uninstall_lorna ;;
-    3) espeak "Goodbye"; exit 0 ;;
-    *) espeak "Goodbye"; exit 0 ;;
+    3) yad --info --text="Goodbye!"; exit 0 ;;
+    *) exit 1 ;;
   esac
 done
