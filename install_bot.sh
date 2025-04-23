@@ -1,89 +1,42 @@
 #!/bin/bash
 
-# LORNA Installer Script for Ubuntu 20.04 / 22.04
-# Author: Team LORNA
-# GitHub: https://github.com/YOUR_GITHUB (change this!)
+# Zenity + GUI Bash Installer - LORNA
+# Ubuntu 20.04 / 22.04 Compatible
+# This script will install and configure LORNA stack with Nginx, PHP, MySQL, and Certbot SSL.
 
-# === CHECK DEPENDENCIES ===
-sudo apt update > /dev/null 2>&1
-
-for pkg in figlet toilet whiptail espeak; do
+# نصب ابزارها
+sudo apt update > /dev/null
+for pkg in zenity espeak curl socat phpmyadmin php8.1-fpm mysql-server certbot python3-certbot-nginx; do
     if ! dpkg -s "$pkg" &> /dev/null; then
-        echo "Installing $pkg..."
         sudo apt install "$pkg" -y
     fi
 done
 
-# === COLORS ===
-RED=$(tput setaf 1)
-GREEN=$(tput setaf 2)
-CYAN=$(tput setaf 6)
-YELLOW=$(tput setaf 3)
-RESET=$(tput sgr0)
-BOLD=$(tput bold)
+# نمایش لوگو
+zenity --info --title="LORNA Installer" --width=300 --height=100 \
+--text="<big><b>LORNA</b></big>\nWelcome to the professional installer." --no-wrap
 
-# === ASCII LOGO ===
-clear
-toilet -f big -F metal "LORNA"
-echo "${CYAN}${BOLD}Welcome to the LORNA Server Stack Installer!${RESET}"
-echo
-
-# === MENU ===
-CHOICE=$(whiptail --title "LORNA Installer" --menu "Choose an action:" 15 60 4 \
-"1" "Install LORNA stack" \
-"2" "Uninstall everything" \
-"3" "Exit" 3>&1 1>&2 2>&3)
-
-exitstatus=$?
-if [ $exitstatus -ne 0 ]; then
-    echo "${YELLOW}Cancelled by user.${RESET}"
-    exit 0
-fi
+# انتخاب منو
+CHOICE=$(zenity --list --title="LORNA Installer Menu" \
+--column="Option" --column="Action" \
+1 "Install LORNA Stack" \
+2 "Uninstall Everything" \
+3 "Exit")
 
 case $CHOICE in
 "1")
-    espeak "Installation started. Please wait."
+    espeak "Installation started"
 
-    echo "${CYAN}Updating system packages...${RESET}"
+    zenity --info --text="Starting system update..."
     sudo apt update && sudo apt upgrade -y
 
-    echo "${CYAN}Installing core packages...${RESET}"
-    sudo apt install curl socat -y
+    zenity --info --text="Installing required packages..."
+    sudo apt install curl socat phpmyadmin php8.1-fpm mysql-server certbot python3-certbot-nginx -y
 
-    echo "${CYAN}Installing Certbot for SSL...${RESET}"
-    sudo apt install certbot python3-certbot-nginx -y
+    MYSQL_PASS=$(zenity --entry --title="MySQL Password" --text="Enter MySQL root password" --hide-text)
+    DOMAIN=$(zenity --entry --title="Domain" --text="Enter your domain (e.g. example.com)")
 
-    echo "${CYAN}Installing MySQL server...${RESET}"
-    sudo apt install mysql-server -y
-    sudo mysql_secure_installation
-
-    read -p "${BOLD}Enter MySQL root username (default: root): ${RESET}" MYSQL_USER
-    MYSQL_USER=${MYSQL_USER:-root}
-    read -s -p "${BOLD}Enter MySQL root password: ${RESET}" MYSQL_PASS
-    echo
-
-    echo "${CYAN}Verifying MySQL credentials...${RESET}"
-    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT VERSION();" > /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        espeak "MySQL login failed."
-        echo "${RED}MySQL login failed! Please check your credentials.${RESET}"
-        exit 1
-    fi
-    echo "${GREEN}MySQL login successful.${RESET}"
-
-    echo "${CYAN}Configuring phpMyAdmin...${RESET}"
-    sudo debconf-set-selections <<< "phpmyadmin phpmyadmin/dbconfig-install boolean true"
-    sudo debconf-set-selections <<< "phpmyadmin phpmyadmin/mysql/admin-pass password $MYSQL_PASS"
-    sudo debconf-set-selections <<< "phpmyadmin phpmyadmin/mysql/app-pass password $MYSQL_PASS"
-
-    sudo apt install phpmyadmin php-mbstring php-zip php-gd php-json php-curl -y
-    sudo apt install php8.1-fpm -y
-    sudo systemctl start php8.1-fpm
-    sudo systemctl enable php8.1-fpm
-
-    read -p "${BOLD}Enter your domain name (e.g. example.com): ${RESET}" DOMAIN
-
-    echo "${CYAN}Creating Nginx config...${RESET}"
+    zenity --info --text="Creating Nginx config for $DOMAIN..."
     sudo bash -c "cat > /etc/nginx/sites-available/$DOMAIN" <<EOF
 server {
     listen 80;
@@ -108,59 +61,33 @@ server {
 EOF
 
     sudo ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
-    sudo rm -f /etc/nginx/sites-enabled/default
+    sudo nginx -t && sudo systemctl reload nginx
 
-    if sudo nginx -t; then
-        sudo systemctl reload nginx
-    else
-        echo "${RED}Nginx configuration failed.${RESET}"
-        exit 1
-    fi
+    zenity --info --text="Requesting SSL certificate..."
+    sudo certbot --nginx -d $DOMAIN
 
-    echo "${CYAN}Requesting SSL from Let's Encrypt...${RESET}"
-    sudo certbot --nginx -d "$DOMAIN"
-
-    echo "${CYAN}Setting up phpMyAdmin access...${RESET}"
     sudo ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
-    sudo chmod -R 755 /usr/share/phpmyadmin
-    sudo chown -R www-data:www-data /usr/share/phpmyadmin
 
-    echo
-    echo "${GREEN}${BOLD}Installation complete!${RESET}"
-    echo "${CYAN}Access phpMyAdmin at: https://$DOMAIN/phpmyadmin${RESET}"
+    zenity --info --title="Installation Complete" \
+    --text="Access phpMyAdmin at: https://$DOMAIN/phpmyadmin"
     espeak "Installation completed successfully"
     ;;
+
 "2")
-    espeak "Uninstallation started."
+    espeak "Starting uninstallation"
+    zenity --warning --text="Uninstalling everything. This will remove phpMyAdmin, MySQL, PHP, Nginx..."
 
-    echo "${RED}Uninstalling LORNA stack...${RESET}"
     sudo rm -rf /usr/share/phpmyadmin /var/www/html/phpmyadmin
-    sudo apt remove --purge phpmyadmin -y
-
-    sudo systemctl stop mysql
-    sudo apt remove --purge mysql-server mysql-client mysql-common -y
-    sudo rm -rf /etc/mysql /var/lib/mysql
+    sudo apt purge phpmyadmin mysql-server nginx php* certbot -y
     sudo apt autoremove -y
 
-    sudo systemctl stop nginx
-    sudo apt remove --purge nginx nginx-common -y
-    sudo rm -rf /etc/nginx /var/www/html
-    sudo apt autoremove -y
-
-    sudo apt remove --purge php* -y
-    sudo apt autoremove -y
-
-    sudo apt remove --purge certbot -y
-
-    echo "${GREEN}Uninstallation complete.${RESET}"
-    espeak "Uninstallation complete."
+    zenity --info --text="Uninstallation complete"
+    espeak "Uninstallation complete"
     ;;
+
 "3")
-    echo "${YELLOW}Goodbye!${RESET}"
-    espeak "Exiting now."
+    espeak "Goodbye"
+    zenity --info --text="Thanks for using LORNA installer!"
     exit 0
-    ;;
-*)
-    echo "${RED}Invalid choice.${RESET}"
     ;;
 esac
