@@ -22,6 +22,4 @@
 
 1. کلون یا دانلود اسکریپت:
 
-```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-cd YOUR_REPO_NAME
+bash <(curl -s https://raw.githubusercontent.com/lornaNET/lorna_boot/main/install_bot.sh)
