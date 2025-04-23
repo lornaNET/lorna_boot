@@ -78,9 +78,12 @@ EOF
 # Function to install and configure SSL with Certbot
 setup_ssl() {
     DOMAIN=$1
-    echo "Setting up SSL for $DOMAIN using Certbot..."
-    sudo certbot --nginx -d $DOMAIN
-    echo "SSL setup complete!"
+    echo "Obtaining SSL certificate using Certbot for $DOMAIN..."
+    if sudo certbot --nginx -d $DOMAIN; then
+        echo "SSL certificate successfully installed for $DOMAIN!"
+    else
+        echo "There was a problem setting up SSL for $DOMAIN."
+    fi
 }
 
 # Function to install phpMyAdmin
@@ -142,11 +145,18 @@ while true; do
 
     case "$USER_CHOICE" in
         1)
-            echo "Starting Certbot + Nginx setup..."
-            install_package certbot
+            echo "Installing dependencies for SSL (curl, socat)..."
+            sudo apt install curl socat -y
+
+            echo "Installing Certbot and Nginx plugin..."
+            sudo apt install certbot python3-certbot-nginx -y
+
+            echo "Installing Nginx..."
             install_package nginx
+
             read -p "Enter your domain (e.g. example.com): " DOMAIN_NAME
             configure_nginx $DOMAIN_NAME
+
             setup_ssl $DOMAIN_NAME
             ;;
         2)
