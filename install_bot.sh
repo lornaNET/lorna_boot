@@ -1,33 +1,42 @@
 #!/bin/bash
 
-# LORNA Installer - whiptail version (terminal GUI)
-# Ubuntu 20.04 / 22.04 Compatible
-# Clean, stable, no desktop dependencies
-# Author: github.com/yourusername
+# LORNA Installer - dialog version
+# Fully terminal-based GUI installer for Ubuntu 20.04/22.04
+# By github.com/yourusername
 
-# Dependencies
-sudo apt update
-for pkg in whiptail curl socat phpmyadmin php8.1-fpm mysql-server certbot python3-certbot-nginx; do
-    if ! dpkg -s "$pkg" &> /dev/null; then
-        sudo apt install "$pkg" -y
-    fi
-done
+# Check for dialog
+if ! command -v dialog &> /dev/null; then
+    echo "Installing 'dialog'..."
+    sudo apt install dialog -y
+fi
 
-# Main Menu
-CHOICE=$(whiptail --title "LORNA Installer" --menu "Choose an option:" 15 60 4 \
-"1" "Install LORNA Stack" \
-"2" "Uninstall Everything" \
-"3" "Exit" 3>&1 1>&2 2>&3)
+# Main menu
+HEIGHT=15
+WIDTH=60
+CHOICE=$(dialog --clear \
+                --backtitle "LORNA Installer" \
+                --title "Main Menu" \
+                --menu "Choose an option:" \
+                $HEIGHT $WIDTH 4 \
+                1 "Install LORNA Stack" \
+                2 "Uninstall Everything" \
+                3 "Exit" \
+                3>&1 1>&2 2>&3)
+
+clear
 
 case $CHOICE in
 "1")
-    whiptail --title "System Update" --msgbox "Updating system..." 8 40
+    dialog --infobox "Updating system..." 5 40
     sudo apt update && sudo apt upgrade -y
 
-    MYSQL_PASS=$(whiptail --title "MySQL Password" --passwordbox "Enter MySQL root password:" 10 60 3>&1 1>&2 2>&3)
-    DOMAIN=$(whiptail --title "Domain" --inputbox "Enter your domain (e.g. example.com):" 10 60 3>&1 1>&2 2>&3)
+    dialog --infobox "Installing packages..." 5 40
+    sudo apt install -y curl socat phpmyadmin php8.1-fpm mysql-server certbot python3-certbot-nginx nginx
 
-    whiptail --title "Nginx" --msgbox "Creating Nginx config for $DOMAIN..." 8 60
+    MYSQL_PASS=$(dialog --title "MySQL Root Password" --insecure --passwordbox "Enter MySQL root password:" 10 60 3>&1 1>&2 2>&3)
+    DOMAIN=$(dialog --title "Your Domain" --inputbox "Enter your domain (e.g. example.com):" 10 60 3>&1 1>&2 2>&3)
+
+    dialog --infobox "Configuring Nginx..." 5 40
     sudo bash -c "cat > /etc/nginx/sites-available/$DOMAIN" <<EOF
 server {
     listen 80;
@@ -54,25 +63,27 @@ EOF
     sudo ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
     sudo nginx -t && sudo systemctl reload nginx
 
-    whiptail --title "SSL Certificate" --msgbox "Requesting SSL for $DOMAIN..." 8 60
+    dialog --infobox "Requesting SSL Certificate..." 5 40
     sudo certbot --nginx -d $DOMAIN
 
     sudo ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
 
-    whiptail --title "Done" --msgbox "Access phpMyAdmin at:\nhttps://$DOMAIN/phpmyadmin" 10 60
+    dialog --msgbox "Installation complete!\nAccess phpMyAdmin at: https://$DOMAIN/phpmyadmin" 10 60
     ;;
 
 "2")
-    if whiptail --title "Uninstall" --yesno "Remove phpMyAdmin, MySQL, PHP, Nginx and Certbot?" 10 60; then
+    dialog --yesno "This will remove LORNA stack (phpMyAdmin, MySQL, PHP, Nginx, etc). Continue?" 10 60
+    response=$?
+    if [ $response -eq 0 ]; then
         sudo rm -rf /usr/share/phpmyadmin /var/www/html/phpmyadmin
         sudo apt purge -y phpmyadmin mysql-server nginx php* certbot
         sudo apt autoremove -y
-        whiptail --msgbox "Uninstallation complete." 8 40
+        dialog --msgbox "Uninstallation complete." 8 40
     fi
     ;;
 
 "3")
-    whiptail --msgbox "Thanks for using LORNA Installer!" 8 40
+    dialog --msgbox "Thanks for using LORNA Installer!" 8 40
     exit 0
     ;;
 esac
