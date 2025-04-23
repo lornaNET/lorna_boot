@@ -1,43 +1,37 @@
 #!/bin/bash
 
-# Zenity + GUI Bash Installer - LORNA
-# Ubuntu 20.04 / 22.04 Compatible
-# This script will install and configure LORNA stack with Nginx, PHP, MySQL, and Certbot SSL.
+# LORNA Installer - YAD Version
+# Compatible with Ubuntu 20.04 / 22.04
 
-# نصب ابزارها
-sudo apt update > /dev/null
-for pkg in zenity espeak curl socat phpmyadmin php8.1-fpm mysql-server certbot python3-certbot-nginx; do
-    if ! dpkg -s "$pkg" &> /dev/null; then
-        sudo apt install "$pkg" -y
-    fi
-done
+# Function to display the main menu
+show_main_menu() {
+  yad --width=400 --height=300 --center --image="logo.png" --title="LORNA Installer" \
+    --text="<b>Welcome to the LORNA Installer</b>\nPlease choose an option:" \
+    --button="Install LORNA Stack":1 \
+    --button="Uninstall Everything":2 \
+    --button="Exit":3
+}
 
-# نمایش لوگو
-zenity --info --title="LORNA Installer" --width=300 --height=100 \
---text="<big><b>LORNA</b></big>\nWelcome to the professional installer." --no-wrap
+# Function to install LORNA stack
+install_lorna() {
+  espeak "Installation started"
+  yad --info --text="Starting system update..."
+  sudo apt update && sudo apt upgrade -y
 
-# انتخاب منو
-CHOICE=$(zenity --list --title="LORNA Installer Menu" \
---column="Option" --column="Action" \
-1 "Install LORNA Stack" \
-2 "Uninstall Everything" \
-3 "Exit")
+  yad --info --text="Installing required packages..."
+  sudo apt install -y curl socat phpmyadmin php8.1-fpm mysql-server certbot python3-certbot-nginx
 
-case $CHOICE in
-"1")
-    espeak "Installation started"
+  # Get MySQL root password and domain
+  credentials=$(yad --form --title="LORNA Configuration" \
+    --field="MySQL Root Password":H \
+    --field="Your Domain (e.g., example.com)")
 
-    zenity --info --text="Starting system update..."
-    sudo apt update && sudo apt upgrade -y
+  MYSQL_PASS=$(echo "$credentials" | cut -d '|' -f1)
+  DOMAIN=$(echo "$credentials" | cut -d '|' -f2)
 
-    zenity --info --text="Installing required packages..."
-    sudo apt install curl socat phpmyadmin php8.1-fpm mysql-server certbot python3-certbot-nginx -y
-
-    MYSQL_PASS=$(zenity --entry --title="MySQL Password" --text="Enter MySQL root password" --hide-text)
-    DOMAIN=$(zenity --entry --title="Domain" --text="Enter your domain (e.g. example.com)")
-
-    zenity --info --text="Creating Nginx config for $DOMAIN..."
-    sudo bash -c "cat > /etc/nginx/sites-available/$DOMAIN" <<EOF
+  # Configure Nginx
+  yad --info --text="Creating Nginx configuration for $DOMAIN..."
+  sudo bash -c "cat > /etc/nginx/sites-available/$DOMAIN" <<EOF
 server {
     listen 80;
     server_name $DOMAIN;
@@ -60,34 +54,41 @@ server {
 }
 EOF
 
-    sudo ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
-    sudo nginx -t && sudo systemctl reload nginx
+  sudo ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
+  sudo nginx -t && sudo systemctl reload nginx
 
-    zenity --info --text="Requesting SSL certificate..."
-    sudo certbot --nginx -d $DOMAIN
+  # Obtain SSL certificate
+  yad --info --text="Requesting SSL certificate..."
+  sudo certbot --nginx -d $DOMAIN
 
-    sudo ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
+  # Setup phpMyAdmin
+  sudo ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
 
-    zenity --info --title="Installation Complete" \
+  yad --info --title="Installation Complete" \
     --text="Access phpMyAdmin at: https://$DOMAIN/phpmyadmin"
-    espeak "Installation completed successfully"
-    ;;
+  espeak "Installation completed successfully"
+}
 
-"2")
-    espeak "Starting uninstallation"
-    zenity --warning --text="Uninstalling everything. This will remove phpMyAdmin, MySQL, PHP, Nginx..."
+# Function to uninstall LORNA stack
+uninstall_lorna() {
+  espeak "Starting uninstallation"
+  yad --warning --text="Uninstalling everything. This will remove phpMyAdmin, MySQL, PHP, Nginx..."
 
-    sudo rm -rf /usr/share/phpmyadmin /var/www/html/phpmyadmin
-    sudo apt purge phpmyadmin mysql-server nginx php* certbot -y
-    sudo apt autoremove -y
+  sudo rm -rf /usr/share/phpmyadmin /var/www/html/phpmyadmin
+  sudo apt purge -y phpmyadmin mysql-server nginx php* certbot
+  sudo apt autoremove -y
 
-    zenity --info --text="Uninstallation complete"
-    espeak "Uninstallation complete"
-    ;;
+  yad --info --text="Uninstallation complete"
+  espeak "Uninstallation complete"
+}
 
-"3")
-    espeak "Goodbye"
-    zenity --info --text="Thanks for using LORNA installer!"
-    exit 0
-    ;;
-esac
+# Main script execution
+while true; do
+  choice=$(show_main_menu)
+  case $? in
+    1) install_lorna ;;
+    2) uninstall_lorna ;;
+    3) espeak "Goodbye"; exit 0 ;;
+    *) espeak "Goodbye"; exit 0 ;;
+  esac
+done
